@@ -38,11 +38,15 @@ from sklearn.ensemble import RandomForestClassifier
 from imblearn.under_sampling import ClusterCentroids
 from sklearn import linear_model
 import pickle
+from sklearn import svm
+import seaborn
+
 
 
 def hddHealth():
     path = "data/"
 
+    #Get
     def getHDDStat():
         #os.system("smartctl -aj -s on /dev/disk0 > /Users/sveta/python/test/stat.js")
         jsFile = "data/stat.js"
@@ -68,8 +72,8 @@ def hddHealth():
     d0 = pd.read_csv(path+filename0)[:0]
 
 
-    yearArr = [2017]
-    qtrArr = [1,2,3,4]
+    yearArr = [2019]
+    qtrArr = [1,2]
 
     def loadFiles(d0,year,qtr):
 
@@ -90,11 +94,13 @@ def hddHealth():
                     dfinal = pd.concat([dfinal, ds], axis=0)
                     print(filename, len(dfinal),len(ds))
 
-        dfinal.to_pickle("/Users/sveta/python/InsightDataScience/data/hdd_"+str(qtr)+"_"+str(year)+".pkl")
+
+        dfinal.to_hdf("/Users/sveta/python/InsightDataScience/data/hdd_"+str(qtr)+"_"+str(year)+".h5", key='dfinal', mode='w')
+
         print("finished loading " +str(year) + ", "+ str(qtr))
         #return dfinal
 
-    def loadingQtrData():
+    def loadingQtrData(yearArr,qtrArr):
         for year in yearArr:
             for qtr in qtrArr:
                 loadFiles(d0,year,qtr)
@@ -201,6 +207,9 @@ def hddHealth():
 
         return df_updated
 
+
+
+
     def EDA(df, dfFailures,dfSuccess):
 
         #########################################################
@@ -293,19 +302,45 @@ def hddHealth():
 
     print("Current Time =", datetime.now().strftime("%H:%M:%S"))
     #df_updated = dataPreprocessing()
-    simpleFeatures = ['capacity_bytes','smart_1_raw', 'smart_5_raw', 'smart_7_raw','smart_9_raw', 'smart_12_raw','smart_192_raw', 'smart_194_raw', 'smart_195_raw','smart_197_raw', 'smart_199_raw', 'smart_240_raw','smart_241_raw']
+
+    print('start loading data')
+
+    loadingQtrData()
+
+    print('loading done')
+    input()
+
+    XYcols = ['modelType','serial_number','capacity_bytes','failure','smart_1_raw', 'smart_5_raw', 'smart_7_raw','smart_9_raw', 'smart_12_raw','smart_192_raw', 'smart_194_raw', 'smart_195_raw','smart_197_raw', 'smart_199_raw', 'smart_240_raw','smart_241_raw']
+
+    featuresArr = ['modelType','capacity_bytes','smart_1_raw', 'smart_5_raw', 'smart_7_raw','smart_9_raw', 'smart_12_raw','smart_192_raw', 'smart_194_raw', 'smart_195_raw','smart_197_raw', 'smart_199_raw', 'smart_240_raw','smart_241_raw']
+
+    SGDFeatures = [ 'smart_1_raw', 'smart_5_raw', 'smart_9_raw','smart_192_raw', 'smart_194_raw',
+                   'smart_240_raw']
+
 
     print('Read preprocessed data')
+
+
+
+
 
     df_updated = pd.read_hdf("data/df_Updated.h5")
     dfModels = pd.read_csv("data/modelList.csv")
 
+    features1 = ['capacity_bytes']
+    arrCol = df_updated.columns
+    def getRawCols(arrCol):
+        for item in arrCol:
+            if '_raw' in item:
+                features1.append(item)
+        return features1
 
 
+
+    #simpleFeatures = SGDFeatures
+    simpleFeatures = getRawCols(arrCol)
     #print(df_updated.columns)
 
-    dfFailures = df_updated[df_updated.failure==1]
-    dfSuccess = df_updated[df_updated.failure==0]
 
     def calculateMean():
         dfmean = pd.DataFrame(dfFailures[simpleFeatures].mean()).rename(columns={0: 'Fail'})
@@ -332,7 +367,7 @@ def hddHealth():
         return np.random.choice(indices, batch_size, probs, replace=True)
 
 
-    print(len(dfFailures),len(dfSuccess))
+    #print(len(dfFailures),len(dfSuccess))
 
     print("Current Time =", datetime.now().strftime("%H:%M:%S"))
 
@@ -345,13 +380,19 @@ def hddHealth():
 
     serNumberNeverFailed = df_neverfailed[df_neverfailed.failure>=50]
 
-
+    start_mem = df_updated.memory_usage().sum()/ 1024**2
+    print('current memory usage: ',start_mem)
 
 
     print("whole ds ",len(df_updated))
     ds = df_updated[~df_updated.serial_number.isin(list(serNumberNeverFailed.serial_number))]
 
+    #ds = df_updated
+    dfFailures = ds[ds.failure==1]
+    dfSuccess = ds[ds.failure==0]
 
+    start_mem = df_updated.memory_usage().sum() / 1024 ** 2
+    print('current memory usage: ', start_mem)
 
 
     #simpleFeatures = ['capacity_bytes','smart_1_raw', 'smart_5_raw', 'smart_7_raw','smart_9_raw', 'smart_12_raw','smart_192_raw', 'smart_194_raw', 'smart_195_raw','smart_197_raw', 'smart_199_raw', 'smart_240_raw','smart_241_raw']
@@ -359,28 +400,34 @@ def hddHealth():
     #                 [0.02656122     0.03499287     0.18742727     0.04481702    0.43668853     0.00379877      0.00102822       0.14376292       0.12092319]
     #simpleFeatures = ['modelType','capacity_bytes','smart_5_raw','smart_9_raw','smart_240_raw']
 
-    features1=['capacity_bytes']
+    simpleFeatures = ['capacity_bytes', 'modelType', 'smart_1_raw', 'smart_5_raw', 'smart_7_raw', 'smart_9_raw',
+                      'smart_12_raw', 'smart_188_raw', 'smart_189_raw', 'smart_190_raw', 'smart_192_raw',
+                      'smart_194_raw', 'smart_195_raw', 'smart_197_raw', 'smart_199_raw', 'smart_200_raw',
+                      'smart_240_raw', 'smart_241_raw']
+
+
 
     #ds = df_updated
 
+    del (df_updated)
+    gc.collect()
 
 
     print("after exclusion",len(ds))
 
-    arrCol = ds.columns
-    def getRawCols():
-        for item in arrCol:
-            if '_raw' in item:
-                features1.append(item)
+
 
     #print(features)
     #
 
     dstrain = ds[ds.capacity_bytes>0]
 
+    del (ds)
+    gc.collect()
 
-    print(len(dstrain[dstrain.failure==0]),len(dstrain[dstrain.failure==1]),len(dstrain) )
+    #print(len(dstrain[dstrain.failure==0]),len(dstrain[dstrain.failure==1]),len(dstrain) )
 
+    print(len(dstrain))
     Y = dstrain[['failure']]
 
     X = dstrain[simpleFeatures]
@@ -404,16 +451,12 @@ def hddHealth():
     X_train = X_train0.fillna(0)
 
 
-    #clfSDG = linear_model.SGDClassifier(max_iter=1000, tol=1e-3)
-    #clf = LogisticRegression(random_state=0, class_weight='balanced').fit(X1, Y)
-    #clf1 = LogisticRegression(random_state=0, class_weight='balanced').fit(X_train1, y_train)
-
 
 
     print('Handling imbalanced data - starting SMOTE ...')
 
 
-    def overSamplingWithSMOTE(X_train,y_train):
+    def overSamplingWithSMOTE(X_train,y_train0):
         sm = SMOTE(sampling_strategy='auto', k_neighbors=5, random_state=42)
 
         #convert pandas to array
@@ -434,7 +477,6 @@ def hddHealth():
     print('After OverSampling, the shape of train_y: ',y_train_res.shape)
 
 
-
     #print(clf2.feature_importances_)
 
 
@@ -443,19 +485,30 @@ def hddHealth():
 
 
     def logisticRegression(X_train_res, y_train_res, Xtest, Ytest):
-        clf2 = LogisticRegression().fit(X_train_res, y_train_res)
+#        clf2 = LogisticRegression(penalty = 'l2', solver = 'saga',tol = 1e-6).fit(X_train_res, y_train_res)
+        clf2 = LogisticRegression(class_weight='balanced',  C=0.5).fit(X_train_res, y_train_res)
+
+        #(penalty = 'l1', solver = 'liblinear',tol = 1e-6, max_iter = int(1e6),warm_start = True,intercept_scaling = 10000.)
+
         #predictions2 = clf2.predict(Xtest)
 
         filename = 'finalized_model.sav'
         pickle.dump(clf2, open(filename, 'wb'))
+        return clf2
 
 
-    #logisticRegression(X_train_res, y_train_res, Xtest, Ytest)
+    #clf2 = logisticRegression(X_train_res, y_train_res, Xtest, Ytest)
 
     filename = 'finalized_model.sav'
     loaded_model = pickle.load(open(filename, 'rb'))
-
     predictions3 = loaded_model.predict(Xtest)
+
+    print (Xtest.head())
+
+
+
+
+    #predictions3 = clf2.predict(Xtest)
     print('results after over sampling, logistic regressioin, no device filtering')
 
     print(classification_report(Ytest, predictions3))
@@ -467,13 +520,22 @@ def hddHealth():
         clfRF = RandomForestClassifier(max_depth=2, random_state=0).fit(X_train_res, y_train_res)
         print('feature impoartance for RF')
         print(clfRF.feature_importances_)
-        input()
+        pd.DataFrame(clfRF.feature_importances_).to_csv("data/featuesSelection.csv")
+        return clfRF
 
+
+    clfRF = randomForest(X_train_res, y_train_res)
+    predictionRF = clfRF.predict(Xtest)
+    print(classification_report(Ytest, predictionRF))
+    print(confusion_matrix(Ytest, predictionRF))
 
 
     #for i in range
     #prediction_sgd = clfSDG.partial_fit(X_batch, y_batch)
 
+    def runSVM(X_train_res, y_train_res):
+        clf = svm.SVC().fit(X_train_res, y_train_res)
+        return clf
 
 
     #for i in range(0, epoch):
@@ -493,21 +555,27 @@ def hddHealth():
 
         dfBatch = pd.concat([dfSuccessbatch, dfFailurebatch], axis=0)
 
-        print(len(dfBatch[dfBatch['failure']]==1))
+        #print(dfBatch[['failure']])
+
 
         X_batch = dfBatch[features].fillna(0)
         y_batch = dfBatch['failure']
 
+
         return X_batch,y_batch
 
 
-    dfsampleSuccess = dfSuccess.sample(n = 200000-len(dfFailures))
+    dfsampleSuccess = dfSuccess.sample(n = 100000-len(dfFailures))
+    #dfsampleSuccess = dfSuccess
 
     dfsampleFailure = dfFailures
-    print(len(dfsampleFailure[dfsampleFailure.failure==1]))
+    #print(len(dfsampleFailure[dfsampleFailure.failure==1]))
+
+
 
     def SDG(dfsampleSuccess,dfsampleFailure,features,iter):
-        SDGmodel = linear_model.SGDClassifier(max_iter=10, loss='log')
+        print(features)
+        SDGmodel = linear_model.SGDClassifier(max_iter=1000, tol=1e-6, loss='log')
         for i in range(0, iter):
             x_batch, y_batch=batchSample(dfsampleSuccess,dfsampleFailure,features)
             #print(y_batch)
@@ -516,12 +584,15 @@ def hddHealth():
 
     print('Starting SGD...')
     print("Current Time =", datetime.now().strftime("%H:%M:%S"))
-    clf = SDG(dfsampleSuccess,dfsampleFailure,simpleFeatures,20)
+
+    clf = SDG(dfsampleSuccess,dfsampleFailure,SGDFeatures,20)
+
+
 
 
     prediction = clf.predict(Xtest)
     print(confusion_matrix(Ytest,prediction))
-    print(classification_report(Ytest, prediction))
+    print(classification_report(Ytest, prediction, zero_division=1))
 
     print("Current Time =", datetime.now().strftime("%H:%M:%S"))
 
@@ -534,35 +605,102 @@ def hddHealth():
         print('Results with under-sampling')
 
 
-def readModel(modelFile):
-    ds = pd.read_csv("data/diskStat3.csv").fillna(0)
-    dfModels = pd.read_csv("data/modelList.csv")
+def readModel():
 
-    dsTest = ds[ds.capacity_bytes > 0]
-    dsTest = pd.merge(left=dsTest, right=dfModels, how='left', left_on='model', right_on='model')
+    #read user test file
+    ds = pd.read_csv("data/diskStat_dc.csv").fillna(0)
 
-    simpleFeatures = ['modelType','capacity_bytes', 'smart_1_raw', 'smart_5_raw', 'smart_7_raw', 'smart_9_raw',
-                      'smart_12_raw', 'smart_192_raw', 'smart_194_raw', 'smart_195_raw', 'smart_197_raw',
-                      'smart_199_raw',
-                      'smart_240_raw', 'smart_241_raw']
-    # validate for another quarter
-    Xtest = dsTest[simpleFeatures]
-    Ytest = dsTest[['failure']]
+    ds = ds[ds.capacity_bytes > 0]
+
+    simpleFeatures = ['capacity_bytes', 'smart_1_raw', 'smart_5_raw', 'smart_7_raw', 'smart_9_raw', 'smart_12_raw',
+                      'smart_188_raw', 'smart_189_raw', 'smart_190_raw', 'smart_192_raw', 'smart_194_raw',
+                      'smart_195_raw', 'smart_197_raw', 'smart_199_raw',
+                      'smart_200_raw', 'smart_240_raw', 'smart_241_raw']
+
+    # validate for user data
+    Xtest = ds[simpleFeatures]
+    Ytest = ds[['failure']]
     X1test = Xtest.fillna(0)
+    info = ds[['date', 'model', 'serial_number', 'capacity_bytes']]
+
+    filename_RF = 'finalized_model_RF1.sav'
+    filename_LR = 'finalized_model.sav'
+
+    loaded_model = pickle.load(open(filename_RF, 'rb'))
+
+    predictions = loaded_model.predict(X1test)
+    probability = loaded_model.predict_proba(X1test)
+
+    user_prob = pd.DataFrame(probability).rename(columns={1: 'probability'})
+    result = pd.merge(Ytest, user_prob[['probability']], right_index=True, left_index=True)
+
+
+    predRF = pd.DataFrame(predictions).rename(columns={0: 'predictions'})
+    result = pd.merge(result, predRF, right_index=True, left_index=True)
+
+    result = pd.merge(result, info[['model', 'serial_number', 'capacity_bytes']], right_index=True,
+                      left_index=True).sort_values(by='probability', ascending=False)
+    # result.to_csv("~/data/dashboardResults.csv")
+
+    serialNumbersOfFailing = list(result[result.predictions == 1]['serial_number'])
+
+
+    disksLikelyToFail = result[result.predictions == 1].head()
+    print(disksLikelyToFail)
+
+    #print(serialNumbersOfFailing[0])
+    #get user data for the device with highest probability of failure
+    dfUser = ds[ds.serial_number == serialNumbersOfFailing[0]]
+
+    topFeatures = pd.read_csv("data/top5Features.csv").head()[['name', 'fullName']]
+    topFeaturesArr = topFeatures[['name']]
+    topFeaturesList = list(topFeaturesArr['name'])
+    topFeatures['name_y'] = topFeatures['name']
+
+    dfFailStat = pd.read_csv("data/failStat.csv")
+    dfSuccessStat = pd.read_csv("data/successStat.csv")
+    # dfFail = dfFailStat[[topFeaturesArr]]
+
+    # print(dfFailStat)
+    # print(topFeatures)
+
+    dfmean = pd.read_csv("data/allmean.csv")
+
+    dfmeanTopFeatures = dfmean[dfmean.name.isin(topFeaturesList)]
+    dfmeanUser = pd.DataFrame(dfUser[simpleFeatures].mean()).rename(columns={0: 'userData'})
+    dfmeanUser['name_x'] = dfmeanUser.index
+    dfmeanUserTopFeatures = dfmeanUser[dfmeanUser.name_x.isin(topFeaturesList)]
+
+    dfmeanTopFeatures = pd.merge(left=dfmeanTopFeatures, right=dfmeanUserTopFeatures, how='left', right_on='name_x',
+                                 left_on='name')
+
+
+    dfmeanTopFeatures = pd.merge(left=dfmeanTopFeatures, right=topFeatures, how='left', right_on='name_y',
+                                 left_on='name_x')
 
 
 
+    dfmeanTopFeaturesHours = dfmeanTopFeatures[dfmeanTopFeatures.fullName == 'Power-On Hours in days']
+    dfmeanTopFeaturesNotHours = dfmeanTopFeatures[dfmeanTopFeatures.fullName != 'Power-On Hours in days']
 
+    dfmeanTopFeaturesHours['Fail'] = [x / 24 for x in dfmeanTopFeaturesHours['Fail']]
+    dfmeanTopFeaturesHours['nonFail'] = [x / 24 for x in dfmeanTopFeaturesHours['nonFail']]
+    dfmeanTopFeaturesHours['userData'] = [x / 24 for x in dfmeanTopFeaturesHours['userData']]
 
-    filename = 'finalized_model.sav'
-    loaded_model = pickle.load(open(filename, 'rb'))
+    dfmeanTopFeatures = pd.concat([dfmeanTopFeaturesHours, dfmeanTopFeaturesNotHours], axis=0)
 
-    predictions3 = loaded_model.predict(Xtest)
-    probability = loaded_model.predict_proba(Xtest)
-    print('results after over sampling, logistic regressioin, no device filtering')
-    print(100*round(probability[0][1],2))
-    print(classification_report(Ytest, predictions3))
-    print(confusion_matrix(Ytest, predictions3))
+    print (dfmeanTopFeatures)
+    # graph to display
+    print(dfmeanTopFeatures[['fullName', 'Fail', 'nonFail', 'userData']])
+    # print(dfmeanUser)
+
+    # print('results after over sampling, logistic regressioin, no device filtering')
+    # print(probability)
+    # print(classification_report(Ytest, predictions3))
+    # print(confusion_matrix(Ytest, predictions3))
+
+    #print(round(100 * round(probability[0][1], 2)))
+    # return round(100*round(probability[0][1],2))
 
 
 
@@ -570,8 +708,8 @@ def readModel(modelFile):
 
 
 if __name__ == '__main__':
-    hddHealth()
-    #readModel("data/modelList.csv")
+    #hddHealth()
+    readModel()
 
 
 

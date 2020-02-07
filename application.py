@@ -1,6 +1,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+
 import pandas as pd
 #import hddHealth
 import pickle
@@ -19,63 +20,92 @@ def generate_table(dataframe, max_rows=10):
     )
 
 
-def readModel():
-    ds = pd.read_csv("data/diskStat3.csv").fillna(0)
-    dfModels = pd.read_csv("data/modelList.csv")
+def readModel(testFileName):
 
-    dsTest = ds[ds.capacity_bytes > 0]
-    dsTest = pd.merge(left=dsTest, right=dfModels, how='left', left_on='model', right_on='model')
+    #read user test file
+    ds = pd.read_csv("~/data/diskStat_dc.csv").fillna(0)
 
+    ds = ds[ds.capacity_bytes > 0]
 
     simpleFeatures = ['capacity_bytes', 'smart_1_raw', 'smart_5_raw', 'smart_7_raw', 'smart_9_raw', 'smart_12_raw',
-                      'smart_192_raw', 'smart_194_raw', 'smart_195_raw', 'smart_197_raw', 'smart_199_raw',
-                      'smart_240_raw', 'smart_241_raw']
+                      'smart_188_raw', 'smart_189_raw', 'smart_190_raw', 'smart_192_raw', 'smart_194_raw',
+                      'smart_195_raw', 'smart_197_raw', 'smart_199_raw',
+                      'smart_200_raw', 'smart_240_raw', 'smart_241_raw']
 
-    # validate for another quarter
-    Xtest = dsTest[simpleFeatures]
-    Ytest = dsTest[['failure']]
+    # validate for user data
+    Xtest = ds[simpleFeatures]
+    Ytest = ds[['failure']]
     X1test = Xtest.fillna(0)
+    info = ds[['date', 'model', 'serial_number', 'capacity_bytes']]
+
+    filename_RF = 'finalized_model_RF.sav'
+    filename_LR = 'finalized_model.sav'
+
+    loaded_model = pickle.load(open(filename_RF, 'rb'))
+
+    predictions = loaded_model.predict(X1test)
+    probability = loaded_model.predict_proba(X1test)
+
+    user_prob = pd.DataFrame(probability).rename(columns={1: 'probability'})
+    result = pd.merge(Ytest, user_prob[['probability']], right_index=True, left_index=True)
+
+
+    predRF = pd.DataFrame(predictions).rename(columns={0: 'predictions'})
+    result = pd.merge(result, predRF, right_index=True, left_index=True)
+
+    result = pd.merge(result, info[['model', 'serial_number', 'capacity_bytes']], right_index=True,
+                      left_index=True).sort_values(by='probability', ascending=False)
+    # result.to_csv("~/data/dashboardResults.csv")
+
+    result['probability']=[round(x,2) for x in result['probability']]
+    serialNumbersOfFailing = list(result[result.predictions == 1]['serial_number'])
+
+
+    disksLikelyToFail = result[result.predictions == 1].head()
+
+
+
+    #get user data for the device with highest probability of failure
+    dfUser = ds[ds.serial_number == serialNumbersOfFailing[0]]
+
+    topFeatures = pd.read_csv("~/data/top5Features.csv").head()[['name', 'fullName']]
+    topFeaturesArr = topFeatures[['name']]
+    topFeaturesList = list(topFeaturesArr['name'])
+    topFeatures['name_y'] = topFeatures['name']
+
+    dfmean = pd.read_csv("data/allmean.csv")
+
+    dfmeanTopFeatures = dfmean[dfmean.name.isin(topFeaturesList)]
+    dfmeanUser = pd.DataFrame(dfUser[simpleFeatures].mean()).rename(columns={0: 'userData'})
+    dfmeanUser['name_x'] = dfmeanUser.index
+    dfmeanUserTopFeatures = dfmeanUser[dfmeanUser.name_x.isin(topFeaturesList)]
+
+    dfmeanTopFeatures = pd.merge(left=dfmeanTopFeatures, right=dfmeanUserTopFeatures, how='left', right_on='name_x',
+                                 left_on='name')
+
+    dfmeanTopFeatures = pd.merge(left=dfmeanTopFeatures, right=topFeatures, how='left', right_on='name_y',
+                                 left_on='name_x')
+
+
+
+    # graph to display
+    dfmeanTopFeatures = dfmeanTopFeatures[['fullName', 'Fail', 'nonFail', 'userData']]
 
 
 
 
 
-    filename = 'finalized_model.sav'
-    loaded_model = pickle.load(open(filename, 'rb'))
 
-    predictions3 = loaded_model.predict(Xtest)
-    probability = loaded_model.predict_proba(Xtest)
-    #print('results after over sampling, logistic regressioin, no device filtering')
-    #print(probability)
-    #print(classification_report(Ytest, predictions3))
-    #print(confusion_matrix(Ytest, predictions3))
-
-    return round(100*round(probability[0][1],2))
+    return dfmeanTopFeatures, serialNumbersOfFailing, disksLikelyToFail[['serial_number','model']]
 
 
 
-dsTest = pd.read_csv("data/diskStat3.csv").fillna(0)
+dfmeanTopFeatures, serialNumbersOfFailing, disksLikelyToFail = readModel("data/diskStat_dc.csv")
 
-simpleFeatures = [ 'smart_1_raw', 'smart_5_raw', 'smart_7_raw', 'smart_9_raw',
-                  'smart_12_raw', 'smart_192_raw', 'smart_194_raw', 'smart_195_raw', 'smart_197_raw', 'smart_199_raw',
-                  'smart_240_raw', 'smart_241_raw']
-
-
-df = pd.read_csv("data/diskStat3.csv")
-df = df[simpleFeatures]
-
-
-dfmeanUser = pd.DataFrame(df[simpleFeatures].mean()).rename(columns={0: 'userData'})
-dfmeanUser = pd.DataFrame(list(dfmeanUser['userData'])).rename(columns={0: 'userData'})
-
-dfmean = pd.read_csv("data/allmean.csv")
-
-dfmean = pd.merge(left = dfmean,right=dfmeanUser, how = 'left', right_index=True,left_index=True)
-
-names = list(dfmean['name'])
-fail = list(dfmean['Fail'])
-nonfail = list(dfmean['nonFail'])
-userData = list(dfmean['userData'])
+names = list(dfmeanTopFeatures['fullName'])
+fail = list(dfmeanTopFeatures['Fail'])
+nonfail = list(dfmeanTopFeatures['nonFail'])
+userData = list(dfmeanTopFeatures['userData'])
 #df1 = df.head()
 
 
@@ -83,23 +113,55 @@ external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
+colors = {
+    'background': '#BCE4FB',
+    'text': '#000000'
+}
 
-app.scripts.config.serve_locally = True
-app.css.config.serve_locally = True
+ # #
 
-
-app.layout = html.Div(children=[
-    html.H1(children='Health Dashboard'),
-
-    html.Div(children=[
-        'Hard drive statistics for today: ',
-         generate_table(df)
-             ]),
+#app.scripts.config.serve_locally = True
+#app.css.config.serve_locally = True
 
 
-    html.H4(children='Probability of hard drive failure is '+ str(readModel())+'%'),
+app.layout = html.Div(style={'backgroundColor': colors['background']}, children=[
+    html.H1(children='Health Dashboard',
+            style={
+                'textAlign': 'center',
+                'color': colors['text']
+            }
+            ),
 
-    html.H4(children='WARNING: Please back up your hard drive!'),
+html.H2(children='WARNING: Please back up or replace these hard drives: ',
+        style={
+            'textAlign': 'center',
+
+            'color': '#FF0000'
+            }
+        ),
+
+    html.Div(  children=[
+
+         generate_table(disksLikelyToFail)
+             ],
+        style={
+            'textAlign': 'center',
+
+            'color': colors['text']
+            }
+
+
+    ),
+
+
+    #html.H4(children='Probability of hard drive failure is '+ str(readModel())+'%'),
+
+    html.H4(children='S.M.A.R.T. features distribution',
+                style={
+                'textAlign': 'center',
+                'color': colors['text']
+            })
+    ,
 
 
     dcc.Graph(
@@ -111,14 +173,25 @@ app.layout = html.Div(children=[
                 {'x': names, 'y': userData, 'type': 'bar', 'name': 'userData'},
             ],
             'layout': {
-                'title': 'Smart features distributions'
+                #'title': 'S.M.A.R.T. features distribution'
+                'plot_bgcolor': colors['background'],
+                'paper_bgcolor': colors['background'],
+                'font': {
+                    'color': colors['text']
+                }
+
             }
         }
    )
 
 ])
 
+
+# local host http://127.0.0.1:8050/
 application = app.server
 
 if __name__ == '__main__':
     application.run(debug=True, port=8080)
+
+#if __name__ == '__main__':
+    #app.run_server(debug=True)
