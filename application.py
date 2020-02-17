@@ -20,25 +20,32 @@ def generate_table(dataframe, max_rows=10):
     )
 
 
-def readModel(testFileName):
+
+
+def readUserData(testFileName):
 
     #read user test file
-    ds = pd.read_csv("~/data/diskStat_dc.csv").fillna(0)
+    ds = pd.read_csv(testFileName).fillna(0)
 
     ds = ds[ds.capacity_bytes > 0]
 
-    simpleFeatures = ['capacity_bytes', 'smart_1_raw', 'smart_5_raw', 'smart_7_raw', 'smart_9_raw', 'smart_12_raw',
-                      'smart_188_raw', 'smart_189_raw', 'smart_190_raw', 'smart_192_raw', 'smart_194_raw',
-                      'smart_195_raw', 'smart_197_raw', 'smart_199_raw',
-                      'smart_200_raw', 'smart_240_raw', 'smart_241_raw']
+    simpleFeatures = ['capacity_bytes', 'smart_10_raw', 'smart_12_raw', 'smart_187_raw', 'smart_188_raw',
+                      'smart_190_raw',
+                      'smart_192_raw', 'smart_193_raw', 'smart_194_raw', 'smart_197_raw', 'smart_198_raw',
+                      'smart_199_raw',
+                      'smart_1_raw', 'smart_240_raw', 'smart_241_raw', 'smart_242_raw', 'smart_3_raw', 'smart_4_raw',
+                      'smart_5_raw',
+                      'smart_7_raw', 'smart_9_raw']
+
 
     # validate for user data
     Xtest = ds[simpleFeatures]
     Ytest = ds[['failure']]
     X1test = Xtest.fillna(0)
+
     info = ds[['date', 'model', 'serial_number', 'capacity_bytes']]
 
-    filename_RF = 'finalized_model_RF.sav'
+    filename_RF = 'finalized_model_RF_final.sav'
     filename_LR = 'finalized_model.sav'
 
     loaded_model = pickle.load(open(filename_RF, 'rb'))
@@ -58,22 +65,20 @@ def readModel(testFileName):
     # result.to_csv("~/data/dashboardResults.csv")
 
     result['probability']=[round(x,2) for x in result['probability']]
-    serialNumbersOfFailing = list(result[result.predictions == 1]['serial_number'])
 
 
-    disksLikelyToFail = result[result.predictions == 1].head()
 
 
 
     #get user data for the device with highest probability of failure
-    dfUser = ds[ds.serial_number == serialNumbersOfFailing[0]]
+    dfUser = ds
 
     topFeatures = pd.read_csv("~/data/top5Features.csv").head()[['name', 'fullName']]
     topFeaturesArr = topFeatures[['name']]
     topFeaturesList = list(topFeaturesArr['name'])
     topFeatures['name_y'] = topFeatures['name']
 
-    dfmean = pd.read_csv("data/allmean.csv")
+    dfmean = pd.read_csv("~/data/allmean.csv")
 
     dfmeanTopFeatures = dfmean[dfmean.name.isin(topFeaturesList)]
     dfmeanUser = pd.DataFrame(dfUser[simpleFeatures].mean()).rename(columns={0: 'userData'})
@@ -96,11 +101,12 @@ def readModel(testFileName):
 
 
 
-    return dfmeanTopFeatures, serialNumbersOfFailing, disksLikelyToFail[['serial_number','model']]
+    return dfmeanTopFeatures, (round(100 * round(probability[0][1], 2)))
 
 
 
-dfmeanTopFeatures, serialNumbersOfFailing, disksLikelyToFail = readModel("data/diskStat_dc.csv")
+
+dfmeanTopFeatures, probability = readUserData("~/data/diskStat_2.csv")
 
 names = list(dfmeanTopFeatures['fullName'])
 fail = list(dfmeanTopFeatures['Fail'])
@@ -124,6 +130,11 @@ colors = {
 #app.css.config.serve_locally = True
 
 
+if probability>50:
+    message = "WARNING! Please back up your hard drive!"
+else:
+    message = "No errors are encounted for your hard drive"
+
 app.layout = html.Div(style={'backgroundColor': colors['background']}, children=[
     html.H1(children='Health Dashboard',
             style={
@@ -132,7 +143,7 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
             }
             ),
 
-html.H2(children='WARNING: Please back up or replace these hard drives: ',
+html.H2(children=message,
         style={
             'textAlign': 'center',
 
@@ -140,23 +151,19 @@ html.H2(children='WARNING: Please back up or replace these hard drives: ',
             }
         ),
 
-    html.Div(  children=[
-
-         generate_table(disksLikelyToFail)
-             ],
+html.H2(children="Probability of failure is : "+str(probability)+" %",
         style={
             'textAlign': 'center',
 
-            'color': colors['text']
+            'color': '#FF0000'
             }
+        ),
 
-
-    ),
 
 
     #html.H4(children='Probability of hard drive failure is '+ str(readModel())+'%'),
 
-    html.H4(children='S.M.A.R.T. features distribution',
+    html.H4(children='Top 5 S.M.A.R.T. features distribution',
                 style={
                 'textAlign': 'center',
                 'color': colors['text']
@@ -194,4 +201,4 @@ if __name__ == '__main__':
     application.run(debug=True, port=8080)
 
 #if __name__ == '__main__':
-    #app.run_server(debug=True)
+#    app.run_server(debug=True)
