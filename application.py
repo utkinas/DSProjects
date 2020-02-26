@@ -5,6 +5,7 @@ import dash_html_components as html
 import pandas as pd
 #import hddHealth
 import pickle
+import math
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, classification_report
 
@@ -30,13 +31,9 @@ def readUserData(testFileName):
     ds = ds[ds.capacity_bytes > 0]
 
     simpleFeatures = ['capacity_bytes', 'smart_10_raw', 'smart_12_raw', 'smart_187_raw', 'smart_188_raw',
-                      'smart_190_raw',
-                      'smart_192_raw', 'smart_193_raw', 'smart_194_raw', 'smart_197_raw', 'smart_198_raw',
-                      'smart_199_raw',
+                      'smart_192_raw', 'smart_193_raw', 'smart_194_raw', 'smart_197_raw', 'smart_199_raw',
                       'smart_1_raw', 'smart_240_raw', 'smart_241_raw', 'smart_242_raw', 'smart_3_raw', 'smart_4_raw',
-                      'smart_5_raw',
-                      'smart_7_raw', 'smart_9_raw']
-
+                      'smart_5_raw', 'smart_7_raw', 'smart_9_raw']
 
     # validate for user data
     Xtest = ds[simpleFeatures]
@@ -45,7 +42,7 @@ def readUserData(testFileName):
 
     info = ds[['date', 'model', 'serial_number', 'capacity_bytes']]
 
-    filename_RF = 'finalized_model_RF_final.sav'
+    filename_RF = 'finalized_model_RF4.sav'
     filename_LR = 'finalized_model.sav'
 
     loaded_model = pickle.load(open(filename_RF, 'rb'))
@@ -96,10 +93,9 @@ def readUserData(testFileName):
     # graph to display
     dfmeanTopFeatures = dfmeanTopFeatures[['fullName', 'Fail', 'nonFail', 'userData']]
 
-
-
-
-
+    dfmeanTopFeatures['Fail'] = dfmeanTopFeatures.Fail / dfmeanTopFeatures.nonFail
+    dfmeanTopFeatures['nonFail'] = dfmeanTopFeatures.nonFail / dfmeanTopFeatures.nonFail
+    dfmeanTopFeatures['userData'] = dfmeanTopFeatures.userData / dfmeanTopFeatures.nonFail
 
     return dfmeanTopFeatures, (round(100 * round(probability[0][1], 2)))
 
@@ -120,7 +116,7 @@ external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
 colors = {
-    'background': '#BCE4FB',
+    'background': '#E8F8F5',
     'text': '#000000'
 }
 
